@@ -29,6 +29,7 @@ class Color_Index(object):
     red = 2
     green = 3
 
+
 class Color_RGB(object):
     white = (255, 255, 255)
     blue = (0, 0, 255)
@@ -255,7 +256,7 @@ class GameGrid:
 
 class KrazyGridWorld:
 
-    def __init__(self, screen_height,
+    def __init__(self, screen_height=0,
                  grid_squares_per_row=9,
                  one_hot_obs=True,
                  seed=42, task_seed=None, init_pos_seed=None,
@@ -340,19 +341,27 @@ class KrazyGridWorld:
         if self.image_obs:
             return self.get_img_obs()
         else:
-            grid_color = copy.deepcopy(self.game_grid.grid_color)
-            grid_color = grid_color.astype(np.uint8)
-            if self.one_hot_obs:
-                n_values = np.max(grid_color) + 1
-                grid_color = np.eye(n_values)[grid_color]
-                return grid_color
             return None
+
+    def get_color_obs(self):
+        grid_color = copy.deepcopy(self.game_grid.grid_color)
+        grid_color = grid_color.astype(np.uint8)
+        if self.one_hot_obs:
+            n_values = np.max(grid_color) + 1
+            grid_color = np.eye(n_values)[grid_color]
+            return grid_color
+
+    def get_combined_obs(self):
+        obs_color = self.get_color_obs()
+        obs_state = self.get_state_obs()
+        return np.concatenate((obs_color, obs_state), axis=2)
 
     def get_img_pyplot_obs(self):
         grid_color = copy.deepcopy(self.game_grid.grid_color)
         grid_color = grid_color.astype(np.uint8)
         if self.one_hot_obs:
-            grid_img = np.zeros((self.grid_squares_per_row, self.grid_squares_per_row, 3))
+            grid_img = np.zeros(
+                (self.grid_squares_per_row, self.grid_squares_per_row, 3))
             for i in range(self.grid_squares_per_row):
                 for j in range(self.grid_squares_per_row):
                     if grid_color[i, j] == Color_Index.white:
@@ -391,12 +400,14 @@ class KrazyGridWorld:
             #         else:
             #             break
 
-            if self.agent.num_steps_until_energy_needed < 1:
-                self.agent.dead = True
+            # if self.agent.num_steps_until_energy_needed < 1:
+            #     self.agent.dead = True
 
             if render:
                 self.render()
-        return self.get_obs(), self.get_reward(), self.agent.dead, dict()
+
+            agent_pos = self.agent.agent_position
+        return self.get_obs(), self.get_reward(), self.agent.dead, dict({'color': self.game_grid.grid_color[agent_pos[0], agent_pos[1]]})
 
     def check_dead(self):
         agent_pos = self.agent.agent_position
@@ -440,7 +451,7 @@ class KrazyGridWorld:
         self.simple_image_viewer.imshow(im_obs)
         time.sleep(0.075)
 
-    def get_state_obs(self):
+    def get_state_obs(self, flatten=False):
         grid_np = copy.deepcopy(self.game_grid.grid_np)
         agent_p = self.agent.agent_position
         grid_np[agent_p[0], agent_p[1]] = self.tile_types.agent
@@ -464,7 +475,10 @@ class KrazyGridWorld:
 
             grid_np = np.array(neighbors)
 
-        return grid_np.flatten()
+        if flatten:
+            return grid_np.flatten()
+        else:
+            return grid_np
 
     def get_img_obs(self):
         grid_np = copy.deepcopy(self.game_grid.grid_np)
