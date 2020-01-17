@@ -103,7 +103,7 @@ class Agent:
 class GameGrid:
     def __init__(self, task_rng, grid_squares_per_row,
                  tile_types, agent,
-                 death_sq_perc, energy_sq_perc, ice_sq_perc,
+                 num_death, energy_sq_perc, ice_sq_perc,
                  num_goals, min_goal_distance, max_goal_distance,
                  num_transporters,
                  ):
@@ -115,7 +115,7 @@ class GameGrid:
         self.grid_squares_per_row = grid_squares_per_row
         self.grid_np = None
         self.door_pos = None
-        self.death_sq_perc = death_sq_perc
+        self.num_death = num_death
         self.energy_sq_perc = energy_sq_perc
         self.ice_sq_perc = ice_sq_perc
         self.num_goals = num_goals
@@ -140,26 +140,28 @@ class GameGrid:
 
     def get_one_non_agent_square(self):
         g = self.task_rng.randint(0, self.grid_squares_per_row - 1, (2,))
-        if g[0] != self.agent.agent_position[0] or g[1] != self.agent.agent_position[1]:
+        if (g[0] != self.agent.agent_position[0] or g[1] != self.agent.agent_position[1]) and \
+                self.grid_np[g[0], g[1]] == self.tile_types.normal:
             return g
         return self.get_one_non_agent_square()
 
     def reset_death_squares(self):
         ds = []
+        visited_ds = []
         colors_needed = [Color_Index.blue, Color_Index.green, Color_Index.red]
-        num_d_squares = int(self.grid_squares_per_row *
-                            self.grid_squares_per_row * self.death_sq_perc)
-        while len(ds) < num_d_squares:
+        while len(ds) < self.num_death:
             d = self.get_one_non_agent_square()
-            if self.grid_np[d[0], d[1]] == self.tile_types.normal:
+            if self.grid_np[d[0], d[1]] == self.tile_types.normal and d.tolist() not in visited_ds:
                 if self.door_pos is not None:
                     dist_1 = abs(d[0] - self.door_pos[1])
                     dist_2 = abs(d[1] - self.door_pos[2])
                     dist = dist_1 + dist_2
                     if dist > 2:
                         ds.append(d)
+                        visited_ds.append(d.tolist())
                 else:
                     ds.append(d)
+                    visited_ds.append(d.tolist())
         for d in ds:
             self.grid_np[d[0], d[1]] = self.tile_types.death
             if len(colors_needed) > 0:
@@ -184,14 +186,16 @@ class GameGrid:
         gs = []
         goal_squares_loc = []
         colors_needed = [Color_Index.blue, Color_Index.green, Color_Index.red]
+        visited_gs = []
         while len(gs) < self.num_goals:
             g = self.get_one_non_agent_square()
             if self.grid_np[g[0], g[1]] == self.tile_types.normal:
                 dist_1 = abs(g[1] - self.agent.agent_position[0])
                 dist_2 = abs(g[0] - self.agent.agent_position[1])
                 dist = dist_1 + dist_2
-                if self.min_goal_distance < dist < self.max_goal_distance:
+                if self.min_goal_distance < dist < self.max_goal_distance and g.tolist() not in visited_gs:
                     gs.append(g)
+                    visited_gs.append(g.tolist())
         for g in gs:
             self.grid_np[g[0], g[1]] = self.tile_types.goal
             goal_squares_loc.append([g[0], g[1]])
@@ -260,7 +264,7 @@ class KrazyGridWorld:
                  grid_squares_per_row=9,
                  one_hot_obs=True,
                  seed=42, task_seed=None, init_pos_seed=None,
-                 death_square_percentage=0.1, ice_sq_perc=0.05,
+                 num_death=3, ice_sq_perc=0.05,
                  num_goals=3, min_goal_distance=2, max_goal_distance=np.inf,
                  num_steps_before_energy_needed=11, energy_replenish=8, energy_sq_perc=0.05,
                  num_transporters=1,
@@ -291,7 +295,7 @@ class KrazyGridWorld:
                                   tile_types=self.tile_types,
                                   agent=self.agent,
                                   task_rng=self.task_rng,
-                                  death_sq_perc=death_square_percentage,
+                                  num_death=num_death,
                                   energy_sq_perc=energy_sq_perc,
                                   ice_sq_perc=ice_sq_perc,
                                   num_goals=num_goals, min_goal_distance=min_goal_distance,
@@ -348,6 +352,7 @@ class KrazyGridWorld:
         grid_color = grid_color.astype(np.uint8)
         if self.one_hot_obs:
             n_values = np.max(grid_color) + 1
+            # n_values = 4
             grid_color = np.eye(n_values)[grid_color]
             return grid_color
 
@@ -421,6 +426,11 @@ class KrazyGridWorld:
                                    self.agent.agent_position[1]] = self.tile_types.normal
             self.num_goals_obtained += 1
 
+    def at_goal(self):
+        if self.game_grid.grid_np[self.agent.agent_position[0], self.agent.agent_position[1]] == self.tile_types.goal:
+            return True
+        return False
+
     def check_at_energy(self):
         if self.game_grid.grid_np[self.agent.agent_position[0], self.agent.agent_position[1]] == self.tile_types.energy:
             self.game_grid.grid_np[self.agent.agent_position[0],
@@ -459,6 +469,7 @@ class KrazyGridWorld:
         # agent_p = np.array(self.agent.agent_position)
         if self.one_hot_obs:
             n_values = np.max(grid_np) + 1
+            # n_values = 4
             grid_np = np.eye(n_values)[grid_np]
             # agent_p_temp = np.zeros((self.game_grid.grid_squares_per_row, self.game_grid.grid_squares_per_row, 1))
             # agent_p_temp[agent_p[0], agent_p[1], :] = 1

@@ -12,11 +12,13 @@ def conv2d_size_out(size, kernel_size=5, stride=2):
 
 
 class DQN(nn.Module):
-    def __init__(self, height, width, channel_in, action_dim, input_size):
+    def __init__(self, height, width, channel_in, action_dim, input_size, device):
         super(DQN, self).__init__()
 
+        self.device = device
+
         # Vision processing
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(channel_in, 32, kernel_size=3, stride=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
 
@@ -27,7 +29,7 @@ class DQN(nn.Module):
 
         # Language processing
         self.lstm_hidden_size = 128
-        self.embedding == nn.Embedding(input_size, 32)
+        self.embedding = nn.Embedding(input_size, 32)
         self.lstm = nn.LSTM(32, self.lstm_hidden_size)
 
         # Gated-Attention layers
@@ -36,6 +38,8 @@ class DQN(nn.Module):
         self.l1 = nn.Linear(self.convw * self.convh * 64, 256)
 
         self.l_action = nn.Linear(256, action_dim)
+
+        self.to(self.device)
 
     def forward(self, inputs):
         state, advice = inputs
@@ -46,25 +50,25 @@ class DQN(nn.Module):
         image_rep = F.relu(self.conv3(x))
 
         # Language processing
-        encoder_hidden = (torch.zeros(1, advice.size(0), self.lstm_hidden_size, requires_grad=True),
-                          torch.zeros(1, advice.size(0), self.lstm_hidden_size, requires_grad=True))
+        encoder_hidden = (torch.zeros(1, advice.size(0), self.lstm_hidden_size, requires_grad=True).to(self.device),
+                          torch.zeros(1, advice.size(0), self.lstm_hidden_size, requires_grad=True).to(self.device))
         for i in range(advice.size(1)):
             word_embedding = self.embedding(advice[:, i]).unsqueeze(0)
             _, encoder_hidden = self.lstm(word_embedding, encoder_hidden)
-        advice_rep = encoder_hidden[0].view(encoder_hidden.size(1), -1)
+        advice_rep = encoder_hidden[0].view(encoder_hidden[0].size(1), -1)
 
         # Attention
-        advice_attention = F.sigmoid(self.attn_linear(advice_rep))
+        advice_attention = torch.sigmoid(self.attn_linear(advice_rep))
 
         # Gated-Attention
         advice_attention = advice_attention.unsqueeze(2).unsqueeze(3)
-        advice_attention.expand(1, 64, self.convh, self.convw)
+        advice_attention.expand(advice_attention.size(0), 64, self.convh, self.convw)
         assert image_rep.size() == advice_attention.size()
         x = image_rep * advice_attention
         x = x.view(x.size(0), -1)
 
         x = F.relu(self.l1(x))
-        action_values = F.relu(self.l_action(x))
+        action_values = self.l_action(x)
 
         return action_values
 
@@ -82,9 +86,9 @@ class Model(object):
         self.input_size = input_size
 
         self.dqn = DQN(height, width, channel_in, action_dim,
-                       self.input_size).to(self.device)
+                       self.input_size, self.device)
         self.dqn_target = DQN(height, width, channel_in,
-                              action_dim, self.input_size).to(self.device)
+                              action_dim, self.input_size, self.device)
 
         self.dqn_optimizer = optim.Adam(self.dqn.parameters(), lr=lr)
 
@@ -97,11 +101,13 @@ class Model(object):
             self.word_counter += 1
 
     def advice_to_idx(self, advice):
-        advice_idx = torch.zeros(len(advice, self.input_size)).to(self.device)
-        for i in range(advice):
+        advice_idx = torch.zeros(
+            len(advice), self.input_size, dtype=torch.long).to(self.device)
+        for i in range(len(advice)):
             for j in range(self.input_size):
-                self.add_word(advice[i][j])
-                advice_idx[i, j] = self.words[advice[i][j]]
+                if j < len(advice[i]):
+                    self.add_word(advice[i][j])
+                    advice_idx[i, j] = self.words[advice[i][j]]
         return advice_idx
 
     def select_action(self, state, advice, epsilon=0.05):
@@ -113,38 +119,39 @@ class Model(object):
                 state = torch.unsqueeze(
                     torch.FloatTensor(state), 0).to(self.device)
                 advice = self.advice_to_idx([advice])
-                action = self.dqn((state, advice))
-                return torch.argmax(action).squeeze().cpu()
+                action = self.dqn_target((state, advice)).squeeze()
+                return torch.argmax(action).cpu()
 
-    def _update_target_model(self):
+    def update_target_model(self):
         self.dqn_target.load_state_dict(self.dqn.state_dict())
 
-    def update(self, replay_buffer, epochs, batch_size, max_grad_norm=0.5):
-        self._update_target_model()
-        for _ in range(epochs):
-            (states, advices), actions, expected_rewards = replay_buffer.sample()
-            states = torch.FloatTensor(states).to(self.device)
-            advices = self.advice_to_idx(advices)
-            actions = torch.Tensor(actions).to(self.device)
-            expected_rewards = torch.FloatTensor(expected_rewards).to(self.device)
-            actual_rewards = self.dqn_target((states, advices))
+    def update(self, bs, replay_buffer):
+        if len(replay_buffer) < bs:
+            return
+        (states, advices), actions, expected_rewards = replay_buffer.sample(bs)
+        states = torch.FloatTensor(states).to(self.device)
+        advices = self.advice_to_idx(advices)
+        expected_rewards = torch.FloatTensor(expected_rewards).to(self.device)
+        actions = np.stack((np.arange(bs), actions))
+        actual_rewards = self.dqn((states, advices))[actions]
+        loss = torch.sum((actual_rewards - expected_rewards) ** 2)
+        self.dqn_optimizer.zero_grad()
+        loss.backward()
+        self.dqn_optimizer.step()
 
-            loss = (actual_rewards - expected_rewards) ** 2
-            self.dqn_optimizer.zero_grad()
-            loss.backward()
-            self.dqn_optimizer.step()
-
-            if self.writer is not None:
-                self.writer.add_scalar('loss', loss.detach())
-                self.writer.add_histogram('action_value_dist', actions)
-                self.writer.add_histogram('actual_rewards', actual_rewards)
+        if self.writer is not None:
+            self.writer.add_histogram('action_value_dist', actions)
+            self.writer.add_histogram('actual_rewards', actual_rewards.detach())
+        
+        return loss
 
     def save(self, directory, name):
         torch.save(self.dqn.state_dict(), '%s/%s_dqn.pth' % (directory, name))
         torch.save(self.dqn_target.state_dict(),
                    '%s/%s_dqn_target.pth' % (directory, name))
         torch.save(self.words, '%s/%s_words.pth' % (directory, name))
-        torch.save(self.word_counter, '%s/%s_word_counter.pth' % (directory, name))
+        torch.save(self.word_counter, '%s/%s_word_counter.pth' %
+                   (directory, name))
 
     def load(self, directory, name):
         self.dqn.load_state_dict(torch.load('%s/%s_dqn.pth' % (directory, name),
@@ -152,4 +159,5 @@ class Model(object):
         self.dqn_target.load_state_dict(torch.load('%s/%s_dqn_target.pth' % (directory, name),
                                                    map_location=lambda storage, loc: storage))
         self.words = torch.load('%s/%s_words.pth' % (directory, name))
-        self.word_counter = torch.load('%s/%s_word_counter.pth' % (directory, name))
+        self.word_counter = torch.load(
+            '%s/%s_word_counter.pth' % (directory, name))
