@@ -23,9 +23,7 @@ advices = {
     "Reach green goal",
     "Reach red lava",
     "Reach blue lava",
-    "Reach green lava",
-    "Avoid any lava",
-    "Avoid any goal"
+    "Reach green lava"
 }
 
 

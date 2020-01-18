@@ -123,14 +123,13 @@ class Model(object):
             return int(random() * 4)
         else:
             with torch.no_grad():
-                state = torch.unsqueeze(
-                    torch.FloatTensor(state), 0).to(self.device)
+                state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
                 advice = self.advice_to_idx([advice])
                 if dqn_num == 0:
-                    action = self.dqn1((state, advice)).squeeze()
+                    action = self.dqn1((state, advice))
                 else:
-                    action = self.dqn2((state, advice)).squeeze()
-                return torch.argmax(action).cpu()
+                    action = self.dqn2((state, advice))
+                return np.argmax(action.cpu().data.numpy().flatten())
 
     def update(self, bs, replay_buffer, dqn_num, gamma=0.9):
         if len(replay_buffer) < bs:
@@ -144,25 +143,16 @@ class Model(object):
         actions = np.stack((np.arange(bs), actions))
         if dqn_num == 0:
             q_values = self.dqn1((states, advices))[actions]
-            with torch.no_grad():
-                next_q_values = torch.max(self.dqn1((next_states, advices)), 1)[0]
+            next_q_values = torch.max(self.dqn2((next_states, advices)), 1)[0]
         else:
             q_values = self.dqn2((states, advices))[actions]
-            with torch.no_grad():
-                next_q_values = torch.max(self.dqn1((next_states, advices)), 1)[0]
+            next_q_values = torch.max(self.dqn1((next_states, advices)), 1)[0]
         
 
-        expected_q_values = rewards + gamma * next_q_values * (1 - dones)
+        expected_q_values = rewards + (gamma * next_q_values * (1 - dones)).detach()
 
         loss = F.mse_loss(q_values, expected_q_values)
-
-        # print(rewards)
-        # print(q_values)
-        # print(next_q_values)
-        # print(expected_q_values)
-        # print(q_values - expected_q_values)
-        # if (random() < 0.05):
-        #     1/0
+        
         if dqn_num == 0:
             self.dqn1_optimizer.zero_grad()
             loss.backward()

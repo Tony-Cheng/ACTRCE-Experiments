@@ -310,8 +310,8 @@ class KrazyGridWorld:
         self.simple_image_viewer = None
         self.last_im_obs = None
 
-    def reset(self, reset_agent_start_pos=True, reset_board=True,
-              reset_colors=True, reset_dynamics=False):
+    def reset(self, reset_agent_start_pos=False, reset_board=False,
+              reset_colors=False, reset_dynamics=False):
         self.agent.dead = False
         self.agent.agent_position = copy.deepcopy(
             self.agent.agent_position_init)
