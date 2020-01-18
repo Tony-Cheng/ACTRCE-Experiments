@@ -42,7 +42,6 @@ class OptimisticTeacher(object):
         if is_lava and "Avoid any lava" in self.plausible_advices:
             self.plausible_advices.remove("Avoid any lava")
 
-
     def get_advice(self, color, at_goal, is_lava):
         if at_goal and color == Color_Index.red:
             self.plausible_advices.add("Reach red goal")
@@ -63,9 +62,45 @@ class OptimisticTeacher(object):
         return advice_list[int(random() * len(advice_list))]
 
 
+class DiscouragingTeacher(object):
+    def __init__(self):
+        super(DiscouragingTeacher, self).__init__()
+
+    def reset(self, initial_advice):
+        self.not_plausible_advices = set()
+        self.initial_advice = initial_advice
+
+    def update_advice(self, color, at_goal, is_lava):
+        if at_goal and "Avoid any goal" not in self.not_plausible_advices:
+            self.not_plausible_advices.add("Avoid any goal")
+        if is_lava and "Avoid any lava" not in self.not_plausible_advices:
+            self.not_plausible_advices.add("Avoid any lava")
+
+    def get_advice(self, color, at_goal, is_lava):
+        if not (at_goal and color == Color_Index.red):
+            self.not_plausible_advices.add("Reach red goal")
+        if not (at_goal and color == Color_Index.blue):
+            self.not_plausible_advices.add("Reach blue goal")
+        if not (at_goal and color == Color_Index.green):
+            self.not_plausible_advices.add("Reach green goal")
+        if not (is_lava and color == Color_Index.red):
+            self.not_plausible_advices.add("Reach red lava")
+        if not (is_lava and color == Color_Index.blue):
+            self.not_plausible_advices.add("Reach blue lava")
+        if not (is_lava and color == Color_Index.green):
+            self.not_plausible_advices.add("Reach green lava")
+
+        advice_list = list(self.not_plausible_advices)
+        if self.initial_advice in advice_list:
+            return self.initial_advice
+        else:
+            return None
+
+
 class ReplayBuffer:
     def __init__(self, max_size=5000):
-        self.teacher = OptimisticTeacher()
+        self.teacher1 = OptimisticTeacher()
+        self.teacher2 = DiscouragingTeacher()
         self.max_size = max_size
         self.reset()
 
@@ -74,32 +109,42 @@ class ReplayBuffer:
         self.all_advices = []
         self.all_actions = []
         self.all_expected_rewards = []
-        self.new_episode()
 
-    def new_episode(self):
+    def new_episode(self, initial_advice):
         self.cur_states = []
         self.cur_actions = []
-        self.teacher.reset()
+        self.teacher1.reset()
+        self.teacher2.reset(initial_advice)
 
     def add(self, state, action, color, at_goal, is_lava):
         self.cur_states.append(state)
         self.cur_actions.append(action)
-        self.teacher.update_advice(color, at_goal, is_lava)
+        self.teacher1.update_advice(color, at_goal, is_lava)
+        self.teacher2.update_advice(color, at_goal, is_lava)
 
     def compute_reward(self, color, at_goal, is_lava, gamma=0.99):
-        advice = self.teacher.get_advice(color, at_goal, is_lava)
+        optimistic_advice = self.teacher1.get_advice(color, at_goal, is_lava)
+        discouraging_advice = self.teacher2.get_advice(color, at_goal, is_lava)
 
-        if advice is None:
-            return
+        if optimistic_advice is not None:
+            cur_reward = 1.0
 
-        cur_reward = 1.0
+            for i in reversed(range(len(self.cur_states))):
+                self.all_actions.append(self.cur_actions[i])
+                self.all_states.append(self.cur_states[i])
+                self.all_advices.append(optimistic_advice.split(" "))
+                self.all_expected_rewards.append(cur_reward)
+                cur_reward *= gamma
 
-        for i in reversed(range(len(self.cur_states))):
-            self.all_actions.append(self.cur_actions[i])
-            self.all_states.append(self.cur_states[i])
-            self.all_advices.append(advice.split(" "))
-            self.all_expected_rewards.append(cur_reward)
-            cur_reward *= gamma
+        if discouraging_advice is not None:
+            cur_reward = -1.0
+
+            for i in reversed(range(len(self.cur_states))):
+                self.all_actions.append(self.cur_actions[i])
+                self.all_states.append(self.cur_states[i])
+                self.all_advices.append(optimistic_advice.split(" "))
+                self.all_expected_rewards.append(cur_reward)
+                cur_reward *= gamma
 
         if (len(self.all_states) > self.max_size):
             self.all_states = self.all_states[-self.max_size:]

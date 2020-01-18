@@ -139,14 +139,13 @@ class Model(object):
         actions = np.stack((np.arange(bs), actions))
         actual_rewards = self.dqn((states, advices))[actions]
 
-        loss = F.mse_loss(actual_rewards, expected_rewards)
+        loss = F.smooth_l1_loss(actual_rewards, expected_rewards)
         
         self.dqn_optimizer.zero_grad()
         loss.backward()
         self.dqn_optimizer.step()
 
         if self.writer is not None:
-            self.writer.add_histogram('action_value_dist', actions)
             self.writer.add_histogram('actual_rewards', actual_rewards.detach())
         
         return loss
