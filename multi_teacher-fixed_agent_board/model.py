@@ -151,8 +151,8 @@ class Model(object):
 
         expected_q_values = rewards + (gamma * next_q_values * (1 - dones)).detach()
 
-        loss = F.mse_loss(q_values, expected_q_values)
-        
+        loss = F.smooth_l1_loss(q_values, expected_q_values)
+
         if dqn_num == 0:
             self.dqn1_optimizer.zero_grad()
             loss.backward()
