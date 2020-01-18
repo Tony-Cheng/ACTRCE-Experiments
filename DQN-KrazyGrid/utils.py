@@ -35,51 +35,32 @@ class OptimisticTeacher(object):
 
     def reset(self):
         self.plausible_advices = {"Avoid any lava", "Avoid any goal"}
-        self.initial_advice = sample_advice()
-        self.last_advice = None
-        return self.initial_advice
 
-    def compute_step(self, color, at_goal, is_lava):
-        self.last_advice = None
+    def update_advice(self, color, at_goal, is_lava):
         if at_goal and "Avoid any goal" in self.plausible_advices:
             self.plausible_advices.remove("Avoid any goal")
         if is_lava and "Avoid any lava" in self.plausible_advices:
             self.plausible_advices.remove("Avoid any lava")
 
+
+    def get_advice(self, color, at_goal, is_lava):
         if at_goal and color == Color_Index.red:
-            self.last_advice = "Reach red goal"
+            self.plausible_advices.add("Reach red goal")
         if at_goal and color == Color_Index.blue:
-            self.last_advice = "Reach blue goal"
+            self.plausible_advices.add("Reach blue goal")
         if at_goal and color == Color_Index.green:
-            self.last_advice = "Reach green goal"
+            self.plausible_advices.add("Reach green goal")
         if is_lava and color == Color_Index.red:
-            self.last_advice = "Reach red lava"
+            self.plausible_advices.add("Reach red lava")
         if is_lava and color == Color_Index.blue:
-            self.last_advice = "Reach blue lava"
+            self.plausible_advices.add("Reach blue lava")
         if is_lava and color == Color_Index.green:
-            self.last_advice = "Reach green lava"
+            self.plausible_advices.add("Reach green lava")
 
-        if self.initial_advice == self.last_advice:
-            return True
-
-        if self.initial_advice == "Avoid any goal" and "Avoid any goal" in self.plausible_advices:
-            self.last_advice = "Avoid any goal"
-            return False
-        if self.initial_advice == "Avoid any lava" and "Avoid any lava" in self.plausible_advices:
-            self.last_advice == "Avoid any lava"
-            return False
-        return False
-
-    def get_advice(self):
-        if self.last_advice is not None:
-            if self.last_advice == self.initial_advice:
-                return self.last_advice, True
-            else:
-                if self.last_advice not in self.plausible_advices:
-                    self.plausible_advices.add(self.last_advice)
-                advice_list = list(self.plausible_advices)
-                return advice_list[int(random() * len(advice_list))], False
-        return None
+        advice_list = list(self.plausible_advices)
+        if len(advice_list) == 0:
+            return None
+        return advice_list[int(random() * len(advice_list))]
 
 
 class ReplayBuffer:
@@ -98,20 +79,18 @@ class ReplayBuffer:
     def new_episode(self):
         self.cur_states = []
         self.cur_actions = []
-        return self.teacher.reset()
+        self.teacher.reset()
 
     def add(self, state, action, color, at_goal, is_lava):
         self.cur_states.append(state)
         self.cur_actions.append(action)
-        self.teacher.compute_step(color, at_goal, is_lava)
+        self.teacher.update_advice(color, at_goal, is_lava)
 
-    def compute_reward(self, gamma=0.99):
-        advice = self.teacher.get_advice()
+    def compute_reward(self, color, at_goal, is_lava, gamma=0.99):
+        advice = self.teacher.get_advice(color, at_goal, is_lava)
 
         if advice is None:
             return
-        else:
-            advice, is_initial = advice
 
         cur_reward = 1.0
 
@@ -127,8 +106,6 @@ class ReplayBuffer:
             self.all_advices = self.all_advices[-self.max_size:]
             self.all_actions = self.all_actions[-self.max_size:]
             self.all_expected_rewards = self.all_expected_rewards[-self.max_size:]
-
-        return is_initial
 
     def __len__(self):
         return len(self.all_states)
@@ -161,3 +138,27 @@ def sample_advice():
 
 def get_state(env):
     return env.get_combined_obs().transpose((2, 0, 1))
+
+
+def advice_satisfied(initial_advice, color, at_goal, is_lava):
+    if at_goal and color == Color_Index.red and initial_advice == "Reach red goal":
+        return True, True
+    if at_goal and color == Color_Index.blue and initial_advice == "Reach blue goal":
+        return True, True
+    if at_goal and color == Color_Index.green and initial_advice == "Reach green goal":
+        return True, True
+    if is_lava and color == Color_Index.red and initial_advice == "Reach red lava":
+        return True, True
+    if is_lava and color == Color_Index.blue and initial_advice == "Reach blue lava":
+        return True, True
+    if is_lava and color == Color_Index.green and initial_advice == "Reach green lava":
+        return True, True
+    if at_goal and initial_advice == "Avoid any goal":
+        return True, False
+    if is_lava and initial_advice == "Avoid any lava":
+        return True, False
+    if initial_advice == "Avoid any goal":
+        return False, True
+    if initial_advice == "Avoid any lava":
+        return False, True
+    return False, False

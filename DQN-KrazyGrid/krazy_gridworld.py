@@ -420,10 +420,13 @@ class KrazyGridWorld:
         if game_grid[agent_pos[0], agent_pos[1]] == self.tile_types.death:
             self.agent.dead = True
 
+    def is_dead(self):
+        return self.agent.dead
+
     def check_at_goal(self):
         if self.game_grid.grid_np[self.agent.agent_position[0], self.agent.agent_position[1]] == self.tile_types.goal:
-            self.game_grid.grid_np[self.agent.agent_position[0],
-                                   self.agent.agent_position[1]] = self.tile_types.normal
+            # self.game_grid.grid_np[self.agent.agent_position[0],
+            #                        self.agent.agent_position[1]] = self.tile_types.normal
             self.num_goals_obtained += 1
 
     def at_goal(self):

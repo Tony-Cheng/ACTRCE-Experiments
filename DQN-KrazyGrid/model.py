@@ -50,12 +50,16 @@ class DQN(nn.Module):
         image_rep = F.relu(self.conv3(x))
 
         # Language processing
-        encoder_hidden = (torch.zeros(1, advice.size(0), self.lstm_hidden_size, requires_grad=True).to(self.device),
-                          torch.zeros(1, advice.size(0), self.lstm_hidden_size, requires_grad=True).to(self.device))
-        for i in range(advice.size(1)):
-            word_embedding = self.embedding(advice[:, i]).unsqueeze(0)
-            _, encoder_hidden = self.lstm(word_embedding, encoder_hidden)
-        advice_rep = encoder_hidden[0].view(encoder_hidden[0].size(1), -1)
+        word_embedding = []
+        for i in range(len(advice)):
+            word_embedding.append(self.embedding(advice[i]))
+        word_embedding = utils.rnn.pad_sequence(word_embedding)
+
+        encoder_hidden = (torch.zeros(1, len(advice), self.lstm_hidden_size, requires_grad=True).to(self.device),
+                          torch.zeros(1, len(advice), self.lstm_hidden_size, requires_grad=True).to(self.device))
+
+        _, encoder_hidden = self.lstm(word_embedding, encoder_hidden)
+        advice_rep = encoder_hidden[0].view(len(advice), -1)
 
         # Attention
         advice_attention = torch.sigmoid(self.attn_linear(advice_rep))
@@ -63,7 +67,7 @@ class DQN(nn.Module):
         # Gated-Attention
         advice_attention = advice_attention.unsqueeze(2).unsqueeze(3)
         advice_attention.expand(advice_attention.size(0), 64, self.convh, self.convw)
-        assert image_rep.size() == advice_attention.size()
+
         x = image_rep * advice_attention
         x = x.view(x.size(0), -1)
 
@@ -97,18 +101,18 @@ class Model(object):
 
     def add_word(self, word):
         if word not in self.words:
-            self.words[word] = self.word_counter
             self.word_counter += 1
+            self.words[word] = self.word_counter
 
     def advice_to_idx(self, advice):
-        advice_idx = torch.zeros(
-            len(advice), self.input_size, dtype=torch.long).to(self.device)
+        advice_idxes = []
         for i in range(len(advice)):
-            for j in range(self.input_size):
-                if j < len(advice[i]):
-                    self.add_word(advice[i][j])
-                    advice_idx[i, j] = self.words[advice[i][j]]
-        return advice_idx
+            advice_idx = torch.zeros(len(advice[i]), dtype=torch.long).to(self.device)
+            for j in range(len(advice[i])):
+                self.add_word(advice[i][j])
+                advice_idx[j] = self.words[advice[i][j]]
+            advice_idxes.append(advice_idx)
+        return advice_idxes
 
     def select_action(self, state, advice, epsilon=0.05):
         val = random()
@@ -134,7 +138,9 @@ class Model(object):
         expected_rewards = torch.FloatTensor(expected_rewards).to(self.device)
         actions = np.stack((np.arange(bs), actions))
         actual_rewards = self.dqn((states, advices))[actions]
+
         loss = torch.sum((actual_rewards - expected_rewards) ** 2)
+        
         self.dqn_optimizer.zero_grad()
         loss.backward()
         self.dqn_optimizer.step()
