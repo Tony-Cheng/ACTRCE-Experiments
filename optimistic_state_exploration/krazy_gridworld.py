@@ -354,12 +354,27 @@ class KrazyGridWorld:
             n_values = np.max(grid_color) + 1
             # n_values = 4
             grid_color = np.eye(n_values)[grid_color]
-            return grid_color
+            return grid_color[:,:,1:]
 
     def get_combined_obs(self):
         obs_color = self.get_color_obs()
         obs_state = self.get_state_obs()
-        return np.concatenate((obs_color, obs_state), axis=2)
+        new_grid = np.zeros((self.grid_squares_per_row, self.grid_squares_per_row, 7))
+        new_grid[:,:,0] = obs_color[:,:,0]*obs_state[:,:,0]
+        new_grid[:,:,1] = obs_color[:,:,0]*obs_state[:,:,2]
+        new_grid[:,:,2] = obs_color[:,:,1]*obs_state[:,:,0]
+        new_grid[:,:,3] = obs_color[:,:,1]*obs_state[:,:,2]
+        new_grid[:,:,4] = obs_color[:,:,2]*obs_state[:,:,0]
+        new_grid[:,:,5] = obs_color[:,:,2]*obs_state[:,:,2]
+        new_grid[:,:,6] = obs_state[:,:,1]
+        expand_multiplier = 4
+        expanded_grid = np.zeros((expand_multiplier * self.grid_squares_per_row, \
+            expand_multiplier * self.grid_squares_per_row, 7))
+        for i in range(expand_multiplier * self.grid_squares_per_row):
+            for j in range(expand_multiplier * self.grid_squares_per_row):
+                for k in range(7):
+                    expanded_grid[i, j,k] = new_grid[int(i/expand_multiplier), int(j/expand_multiplier), k]
+        return expanded_grid
 
     def get_img_pyplot_obs(self):
         grid_color = copy.deepcopy(self.game_grid.grid_color)
@@ -493,7 +508,7 @@ class KrazyGridWorld:
         if flatten:
             return grid_np.flatten()
         else:
-            return grid_np
+            return grid_np[:,:,1:]
 
     def get_img_obs(self):
         grid_np = copy.deepcopy(self.game_grid.grid_np)

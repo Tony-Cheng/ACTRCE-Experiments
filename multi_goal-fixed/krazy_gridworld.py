@@ -332,7 +332,7 @@ class KrazyGridWorld:
     def reset_task(self):
         # reset the entire board and agent start position, generating a new MDP.
         self.game_grid.get_new_game_grid()
-        # self.reset_agent_start_position()
+        self.reset_agent_start_position()
 
     def reset_agent_start_position(self):
         # keep the previous board but update the agents starting position.
@@ -359,7 +359,7 @@ class KrazyGridWorld:
     def get_combined_obs(self):
         obs_color = self.get_color_obs()
         obs_state = self.get_state_obs()
-        return np.concatenate((obs_color, obs_state), axis=2)
+        return 10 * np.concatenate((obs_color, obs_state), axis=2)
 
     def get_img_pyplot_obs(self):
         grid_color = copy.deepcopy(self.game_grid.grid_color)
