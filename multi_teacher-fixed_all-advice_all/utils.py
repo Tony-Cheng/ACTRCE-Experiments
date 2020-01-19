@@ -17,6 +17,12 @@ class Goal(object):
     avoid_goal = 7
 
 
+desired_advices = {
+    "Reach red goal",
+    "Reach blue goal",
+    "Reach green goal"
+}
+
 advices = {
     "Reach red goal",
     "Reach blue goal",
@@ -25,7 +31,7 @@ advices = {
     "Reach blue lava",
     "Reach green lava",
     "Avoid any lava",
-    "Avoid any lava"
+    "Avoid any goal"
 }
 
 
@@ -36,11 +42,24 @@ class OptimisticTeacher(object):
     def get_advice(self, color, at_goal, is_lava):
         advice_list = []
 
+        for advice in desired_advices:
+            if advice_satisfied(advice, color, at_goal, is_lava):
+                advice_list.append(advice)
+
+        if len(advice_list) == 0:
+            return None
+        return advice_list[int(random() * len(advice_list))]
+
+
+class KnowledgableTeacher(object):
+    def __init__(self):
+        super(KnowledgableTeacher, self).__init__()
+
+    def get_advice(self, color, at_goal, is_lava, not_satisfied):
+        advice_list = []
+
         for advice in advices:
-            if advice == "Avoid any lava" or advice == "Avoid any lava":
-                if not advice_not_satisfied(advice, color, at_goal, is_lava):
-                    advice_list.append(advice)
-            elif advice_satisfied(advice, color, at_goal, is_lava):
+            if advice_satisfied(advice, color, at_goal, is_lava) and advice not in not_satisfied:
                 advice_list.append(advice)
 
         if len(advice_list) == 0:
@@ -55,11 +74,8 @@ class DiscouragingTeacher(object):
     def get_advice(self, color, at_goal, is_lava):
         advice_list = []
 
-        for advice in advices:
-            if advice == "Avoid any lava" or advice == "Avoid any lava":
-                if advice_not_satisfied(advice, color, at_goal, is_lava):
-                    advice_list.append(advice)
-            elif not advice_satisfied(advice, color, at_goal, is_lava):
+        for advice in desired_advices:
+            if not advice_satisfied(advice, color, at_goal, is_lava):
                 advice_list.append(advice)
 
         if len(advice_list) == 0:
@@ -69,7 +85,7 @@ class DiscouragingTeacher(object):
 
 class ReplayBuffer:
     def __init__(self, max_size=5000):
-        self.teacher1 = OptimisticTeacher()
+        self.teacher1 = KnowledgableTeacher()
         self.teacher2 = DiscouragingTeacher()
         self.max_size = max_size
         self.reset()
@@ -90,6 +106,7 @@ class ReplayBuffer:
         self.cur_colors = []
         self.cur_at_goals = []
         self.cur_is_lavas = []
+        self.not_satisfied = set()
 
     def add(self, state, action, next_state, done, color, at_goal, is_lava):
         self.cur_states.append(state)
@@ -100,34 +117,40 @@ class ReplayBuffer:
         self.cur_at_goals.append(at_goal)
         self.cur_is_lavas.append(is_lava)
 
-    def compute_reward(self, color, at_goal, is_lava, gamma=0.99):
-        optimistic_advice = self.teacher1.get_advice(color, at_goal, is_lava)
-        discouraging_advice = self.teacher2.get_advice(color, at_goal, is_lava)
+        if at_goal and "Avoid any goal" not in self.not_satisfied:
+            self.not_satisfied.add("Avoid any goal")
+        if is_lava and "Avoid any lava" not in self.not_satisfied:
+            self.not_satisfied.add("Avoid any lava")
 
-        if optimistic_advice is not None:
+    def compute_reward(self, color, at_goal, is_lava, gamma=0.99):
+        advice1 = self.teacher1.get_advice(
+            color, at_goal, is_lava, self.not_satisfied)
+        advice2 = self.teacher2.get_advice(color, at_goal, is_lava)
+
+        if advice1 is not None:
             for i in range(len(self.cur_states)):
                 self.all_states.append(self.cur_states[i])
-                self.all_advices.append(optimistic_advice.split(' '))
+                self.all_advices.append(advice1.split(' '))
                 self.all_actions.append(self.cur_actions[i])
-                if (optimistic_advice == "Avoid any goal" or optimistic_advice == "Avoid any lava") and \
-                        not advice_not_satisfied(optimistic_advice, color, at_goal, is_lava):
+                if (advice1 == "Avoid any goal" or advice1 == "Avoid any lava") and \
+                        advice_satisfied(advice1, color, at_goal, is_lava):
                     self.all_rewards.append(1/25)
-                elif advice_satisfied(optimistic_advice, self.cur_colors[i], self.cur_at_goals[i], self.cur_is_lavas[i]):
+                elif advice_satisfied(advice1, self.cur_colors[i], self.cur_at_goals[i], self.cur_is_lavas[i]):
                     self.all_rewards.append(1)
                 else:
                     self.all_rewards.append(0)
                 self.all_next_states.append(self.cur_next_states[i])
                 self.all_dones.append(self.cur_dones[i])
 
-        if discouraging_advice is not None:
+        if advice2 is not None:
             for i in range(len(self.cur_states)):
                 self.all_states.append(self.cur_states[i])
-                self.all_advices.append(discouraging_advice.split(' '))
+                self.all_advices.append(advice2.split(' '))
                 self.all_actions.append(self.cur_actions[i])
-                if (discouraging_advice == "Avoid any goal" or discouraging_advice == "Avoid any lava") and \
-                        not advice_not_satisfied(discouraging_advice, color, at_goal, is_lava):
+                if (advice2 == "Avoid any goal" or advice2 == "Avoid any lava") and \
+                        not advice_satisfied(advice2, color, at_goal, is_lava):
                     self.all_rewards.append(1/25)
-                elif advice_satisfied(discouraging_advice, self.cur_colors[i], self.cur_at_goals[i], self.cur_is_lavas[i]):
+                elif advice_satisfied(advice2, self.cur_colors[i], self.cur_at_goals[i], self.cur_is_lavas[i]):
                     self.all_rewards.append(1)
                 else:
                     self.all_rewards.append(0)
@@ -170,12 +193,9 @@ class ReplayBuffer:
 
 
 def sample_advice():
-    advice_list = list(advices)
+    advice_list = list(desired_advices)
     advice = advice_list[int(random() * len(advice_list))]
-    if advice == "Avoid any lava" or advice == "Avoid any goal":
-        return sample_advice()
-    else:
-        return advice
+    return advice
 
 
 def get_state(env):
@@ -195,12 +215,8 @@ def advice_satisfied(initial_advice, color, at_goal, is_lava):
         return True
     if is_lava and color == Color_Index.green and initial_advice == "Reach green lava":
         return True
-    return False
-
-
-def advice_not_satisfied(initial_advice, color, at_goal, is_lava):
-    if at_goal and initial_advice == "Avoid any goal":
+    if not at_goal and initial_advice == "Avoid any goal":
         return True
-    if is_lava and initial_advice == "Avoid any lava":
+    if not is_lava and initial_advice == "Avoid any lava":
         return True
     return False
