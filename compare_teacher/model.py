@@ -66,7 +66,8 @@ class DQN(nn.Module):
 
         # Gated-Attention
         advice_attention = advice_attention.unsqueeze(2).unsqueeze(3)
-        advice_attention.expand(advice_attention.size(0), 64, self.convh, self.convw)
+        advice_attention.expand(advice_attention.size(0),
+                                64, self.convh, self.convw)
 
         x = image_rep * advice_attention
         x = x.view(x.size(0), -1)
@@ -89,12 +90,13 @@ class Model(object):
 
         self.input_size = input_size
 
-        self.dqn = DQN(height, width, channel_in, action_dim,
-                       self.input_size, self.device)
-        self.dqn_target = DQN(height, width, channel_in,
-                              action_dim, self.input_size, self.device)
+        self.dqn1 = DQN(height, width, channel_in, action_dim,
+                        self.input_size, self.device)
+        self.dqn2 = DQN(height, width, channel_in,
+                        action_dim, self.input_size, self.device)
 
-        self.dqn_optimizer = optim.Adam(self.dqn.parameters(), lr=lr)
+        self.dqn1_optimizer = optim.Adam(self.dqn1.parameters(), lr=lr)
+        self.dqn2_optimizer = optim.Adam(self.dqn2.parameters(), lr=lr)
 
         self.words = {}
         self.word_counter = 0
@@ -107,63 +109,78 @@ class Model(object):
     def advice_to_idx(self, advice):
         advice_idxes = []
         for i in range(len(advice)):
-            advice_idx = torch.zeros(len(advice[i]), dtype=torch.long).to(self.device)
+            advice_idx = torch.zeros(
+                len(advice[i]), dtype=torch.long).to(self.device)
             for j in range(len(advice[i])):
                 self.add_word(advice[i][j])
                 advice_idx[j] = self.words[advice[i][j]]
             advice_idxes.append(advice_idx)
         return advice_idxes
 
-    def select_action(self, state, advice, epsilon=0.05):
+    def select_action(self, state, advice, dqn_num, epsilon=0.05):
         val = random()
         if val < epsilon:
             return int(random() * 4)
         else:
             with torch.no_grad():
-                state = torch.unsqueeze(
-                    torch.FloatTensor(state), 0).to(self.device)
+                state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
                 advice = self.advice_to_idx([advice])
-                action = self.dqn_target((state, advice)).squeeze()
-                return torch.argmax(action).cpu()
+                if dqn_num == 0:
+                    action = self.dqn1((state, advice))
+                else:
+                    action = self.dqn2((state, advice))
+                return np.argmax(action.cpu().data.numpy().flatten())
 
-    def update_target_model(self):
-        self.dqn_target.load_state_dict(self.dqn.state_dict())
-
-    def update(self, bs, replay_buffer):
+    def update(self, bs, replay_buffer, dqn_num, gamma=0.9):
         if len(replay_buffer) < bs:
             return
-        (states, advices), actions, expected_rewards = replay_buffer.sample(bs)
+        (states, advices), actions, rewards, next_states, dones = replay_buffer.sample(bs)
         states = torch.FloatTensor(states).to(self.device)
         advices = self.advice_to_idx(advices)
-        expected_rewards = torch.FloatTensor(expected_rewards).to(self.device)
+        rewards = torch.FloatTensor(rewards).to(self.device)
+        next_states = torch.FloatTensor(next_states).to(self.device)
+        dones = torch.FloatTensor(dones).to(self.device)
         actions = np.stack((np.arange(bs), actions))
-        actual_rewards = self.dqn((states, advices))[actions]
+        if dqn_num == 0:
+            q_values = self.dqn1((states, advices))[actions]
+            next_q_values = torch.max(self.dqn2((next_states, advices)), 1)[0]
+        else:
+            q_values = self.dqn2((states, advices))[actions]
+            next_q_values = torch.max(self.dqn1((next_states, advices)), 1)[0]
 
-        loss = F.mse_loss(actual_rewards, expected_rewards)
-        
-        self.dqn_optimizer.zero_grad()
-        loss.backward()
-        self.dqn_optimizer.step()
+        expected_q_values = rewards + \
+            (gamma * next_q_values * (1 - dones)).detach()
+
+        loss = F.smooth_l1_loss(q_values, expected_q_values)
+
+        if dqn_num == 0:
+            self.dqn1_optimizer.zero_grad()
+            loss.backward()
+            self.dqn1_optimizer.step()
+        else:
+            self.dqn2_optimizer.zero_grad()
+            loss.backward()
+            self.dqn2_optimizer.step()
 
         if self.writer is not None:
-            self.writer.add_histogram('action_value_dist', actions)
-            self.writer.add_histogram('actual_rewards', actual_rewards.detach())
-        
+            self.writer.add_histogram(
+                'q_values', q_values.detach())
+
         return loss
 
     def save(self, directory, name):
-        torch.save(self.dqn.state_dict(), '%s/%s_dqn.pth' % (directory, name))
-        torch.save(self.dqn_target.state_dict(),
+        torch.save(self.dqn1.state_dict(), '%s/%s_dqn.pth' % (directory, name))
+        torch.save(self.dqn2.state_dict(),
                    '%s/%s_dqn_target.pth' % (directory, name))
         torch.save(self.words, '%s/%s_words.pth' % (directory, name))
         torch.save(self.word_counter, '%s/%s_word_counter.pth' %
                    (directory, name))
 
     def load(self, directory, name):
-        self.dqn.load_state_dict(torch.load('%s/%s_dqn.pth' % (directory, name),
-                                            map_location=lambda storage, loc: storage))
-        self.dqn_target.load_state_dict(torch.load('%s/%s_dqn_target.pth' % (directory, name),
-                                                   map_location=lambda storage, loc: storage))
+        self.dqn1.load_state_dict(torch.load('%s/%s_dqn.pth' % (directory, name),
+                                             map_location=lambda storage, loc: storage))
+        self.dqn2.load_state_dict(torch.load('%s/%s_dqn_target.pth' % (directory, name),
+                                             map_location=lambda storage, loc: storage))
         self.words = torch.load('%s/%s_words.pth' % (directory, name))
         self.word_counter = torch.load(
             '%s/%s_word_counter.pth' % (directory, name))

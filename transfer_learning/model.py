@@ -147,8 +147,9 @@ class Model(object):
         else:
             q_values = self.dqn2((states, advices))[actions]
             next_q_values = torch.max(self.dqn1((next_states, advices)), 1)[0]
-        
-        expected_q_values = rewards + (gamma * next_q_values * (1 - dones)).detach()
+
+        expected_q_values = rewards + \
+            (gamma * next_q_values * (1 - dones)).detach()
 
         loss = F.smooth_l1_loss(q_values, expected_q_values)
 
@@ -168,18 +169,18 @@ class Model(object):
         return loss
 
     def save(self, directory, name):
-        torch.save(self.dqn.state_dict(), '%s/%s_dqn.pth' % (directory, name))
-        torch.save(self.dqn_target.state_dict(),
+        torch.save(self.dqn1.state_dict(), '%s/%s_dqn.pth' % (directory, name))
+        torch.save(self.dqn2.state_dict(),
                    '%s/%s_dqn_target.pth' % (directory, name))
         torch.save(self.words, '%s/%s_words.pth' % (directory, name))
         torch.save(self.word_counter, '%s/%s_word_counter.pth' %
                    (directory, name))
 
     def load(self, directory, name):
-        self.dqn.load_state_dict(torch.load('%s/%s_dqn.pth' % (directory, name),
-                                            map_location=lambda storage, loc: storage))
-        self.dqn_target.load_state_dict(torch.load('%s/%s_dqn_target.pth' % (directory, name),
-                                                   map_location=lambda storage, loc: storage))
+        self.dqn1.load_state_dict(torch.load('%s/%s_dqn.pth' % (directory, name),
+                                             map_location=lambda storage, loc: storage))
+        self.dqn2.load_state_dict(torch.load('%s/%s_dqn_target.pth' % (directory, name),
+                                             map_location=lambda storage, loc: storage))
         self.words = torch.load('%s/%s_words.pth' % (directory, name))
         self.word_counter = torch.load(
             '%s/%s_word_counter.pth' % (directory, name))

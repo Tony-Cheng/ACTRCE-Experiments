@@ -310,8 +310,8 @@ class KrazyGridWorld:
         self.simple_image_viewer = None
         self.last_im_obs = None
 
-    def reset(self, reset_agent_start_pos=True, reset_board=True,
-              reset_colors=True, reset_dynamics=True):
+    def reset(self, reset_agent_start_pos=False, reset_board=False,
+              reset_colors=False, reset_dynamics=False):
         self.agent.dead = False
         self.agent.agent_position = copy.deepcopy(
             self.agent.agent_position_init)
@@ -467,7 +467,7 @@ class KrazyGridWorld:
     def get_state_obs(self, flatten=False):
         grid_np = copy.deepcopy(self.game_grid.grid_np)
         agent_p = self.agent.agent_position
-        grid_np[agent_p[0], agent_p[1]] = self.tile_types.agent
+        # grid_np[agent_p[0], agent_p[1]] = self.tile_types.agent
         grid_np = grid_np.astype(np.uint8)
         # agent_p = np.array(self.agent.agent_position)
         if self.one_hot_obs:
@@ -476,6 +476,7 @@ class KrazyGridWorld:
             grid_np = np.eye(n_values)[grid_np]
             # agent_p_temp = np.zeros((self.game_grid.grid_squares_per_row, self.game_grid.grid_squares_per_row, 1))
             # agent_p_temp[agent_p[0], agent_p[1], :] = 1
+            grid_np[agent_p[0], agent_p[1], self.tile_types.agent] = 1
 
         if self.use_local_obs:
             neighbors = []
