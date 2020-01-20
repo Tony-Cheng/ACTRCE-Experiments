@@ -29,9 +29,9 @@ advices = {
     "Reach green goal",
     "Reach red lava",
     "Reach blue lava",
-    "Reach green lava",
-    "Avoid any lava",
-    "Avoid any goal"
+    "Reach green lava"
+    # "Avoid any lava",
+    # "Avoid any goal"
 }
 
 
@@ -99,13 +99,29 @@ class PessimisticTeacher(object):
             return None
         return advice_list[int(random() * len(advice_list))]
 
+class DiscouragingPessimisticTeacher(object):
+    def __init__(self):
+        super(DiscouragingPessimisticTeacher, self).__init__()
+
+    def get_advice(self, color, at_goal, is_lava, not_satisfied):
+        advice_list = []
+
+        for advice in advices:
+            if not advice_satisfied(advice, color, at_goal, is_lava) and advice not in not_satisfied and \
+                    advice not in desired_advices:
+                advice_list.append(advice)
+
+        if len(advice_list) == 0:
+            return None
+        return advice_list[int(random() * len(advice_list))]
+
 
 class ReplayBuffer:
     def __init__(self, use_pessimistic=False, max_size=5000):
         self.use_pessimistic = use_pessimistic
         if use_pessimistic:
             self.teacher1 = PessimisticTeacher()
-            self.teacher2 = PessimisticTeacher()
+            self.teacher2 = DiscouragingPessimisticTeacher()
         else:
             self.teacher1 = OptimisticTeacher()
             self.teacher2 = DiscouragingTeacher()

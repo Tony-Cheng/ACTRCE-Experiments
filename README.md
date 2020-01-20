@@ -1,5 +1,5 @@
 # ACTRCE-Experiments
-These are the experiments done to try to reproduce the results of the [ACTRCE paper](https://arxiv.org/abs/1902.04546). Documentations w
+These are the experiments done to try to reproduce the results of the [ACTRCE paper](https://arxiv.org/abs/1902.04546). Documentations will be created later.
 
 ## How to run the experiments
 1. Clone this repository.
@@ -22,7 +22,7 @@ Some experiment graphs and perhaps more detailed analysis can be found in the fo
 
 3. Experiment name: transfer_learning
 
-   
+   The goal of this experiment is to transfer the knowledge that the agent learned from achieving undsirable state. The agent is first trained by two pessimistic teachers. Next, the same agent is trained on a different board with an optimistic teacher and a discouraging teacher. This is compared to an agent that is trained by an optimistic teacher and a discouraging teacher. 
 
 4. Experiment name: fixed_agent, not_fixed
 
