@@ -1,5 +1,5 @@
 # ACTRCE-Experiments
-These are the experiments done to try to reproduce the results of the [ACTRCE paper](https://arxiv.org/abs/1902.04546). Documentations will be added later.
+These are the experiments done to try to reproduce the results in the [ACTRCE paper](https://arxiv.org/abs/1902.04546). Documentations will be added later.
 
 ## How to run the experiments
 1. Clone this repository.
@@ -7,7 +7,7 @@ These are the experiments done to try to reproduce the results of the [ACTRCE pa
 3. In the hyperparameter section of train.ipynb, set the variable log_dir, which is the path to the folder containing tensorboard log files.
 
 ## Environment 
-The environment used in the experiments is [Krazyworld](https://github.com/bstadie/krazyworld). The environment file from the original repository is modified to according to the environment specification in the ACTRCE paper. Each experiment contains its own copy of the environment file, so different state encodings can be tested.
+The environment used in the experiments is [Krazyworld](https://github.com/bstadie/krazyworld). The environment file from the original repository is modified according to the environment specification in the ACTRCE paper. Each experiment contains its own copy of the environment file, so different state encodings can be tested.
 
 ## Selected experiment summary and analysis
 Some experiment graphs and perhaps more detailed analysis can be found in the folder of each experiment.
