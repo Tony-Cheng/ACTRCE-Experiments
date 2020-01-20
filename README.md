@@ -1,5 +1,5 @@
 # ACTRCE-Experiments
-These are the experiments done to try to reproduce the results of the [ACTRCE paper](https://arxiv.org/abs/1902.04546). Documentations will be created later.
+These are the experiments done to try to reproduce the results of the [ACTRCE paper](https://arxiv.org/abs/1902.04546). Documentations will be added later.
 
 ## How to run the experiments
 1. Clone this repository.
