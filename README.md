@@ -18,7 +18,7 @@ Some experiment graphs and perhaps more detailed analysis can be found in the fo
 
 2. Experiment name: compare-teacher
 
-    This experiment aims to compare the performance of the algorithm when using different teachers. More specifically, the experiment compares using optimistic and discouraging teachers to using knowledgeable and discouraging teachers. Other experiment settings are similar to the experiment settings in (1). So, the board is still fixed for this experiment. However, unlike the experiment (1), stochastic gradient descent is used instead of mini batch. The result, shown in the graph in the folder, shows that the agent trained using knowledgeable and discouraging teachers performed much better. The ACTRCE paper showed a similar result.
+    This experiment aims to compare the performance of the algorithm when using different teachers. More specifically, the experiment compares using optimistic and discouraging teachers to using knowledgeable and discouraging teachers. Other experiment settings are similar to the experiment settings in (1). So, the board is still fixed for this experiment. However, unlike the experiment (1), stochastic gradient descent is used instead of mini batch. The result, shown in the graph in the experiment folder, shows that the agent trained using knowledgeable and discouraging teachers performed much better. The ACTRCE paper showed a similar result.
 
 3. Experiment name: transfer_learning
 
