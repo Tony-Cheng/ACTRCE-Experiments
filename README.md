@@ -22,7 +22,7 @@ Some experiment graphs and perhaps more detailed analysis can be found in the fo
 
 3. Experiment name: transfer_learning
 
-   The goal of this experiment is to transfer the knowledge that the agent learned from achieving undsirable state. The agent is first trained by two pessimistic teachers. Next, the same agent is trained on a different board with an optimistic teacher and a discouraging teacher. This is compared to an agent that is trained by an optimistic teacher and a discouraging teacher. 
+   The goal of this experiment is to transfer the knowledge that the agent learned from achieving undsirable state. The agent is first trained by two pessimistic teachers. Next, the same agent is trained on the same board with an optimistic teacher and a discouraging teacher. This is compared to an agent that is trained by an optimistic teacher and a discouraging teacher. As shown by the graphs in the folder, pretraining the network using undesirable goals does improve the training speed.
 
 4. Experiment name: fixed_agent, not_fixed
 
